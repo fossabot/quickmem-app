@@ -44,8 +44,8 @@ import com.msusman.compose.cardstack.rememberStackState
 import com.pwhs.quickmem.R
 import com.pwhs.quickmem.core.data.enums.LearnFrom
 import com.pwhs.quickmem.domain.model.flashcard.FlashCardResponseModel
-import com.pwhs.quickmem.presentation.StandardUiAction
-import com.pwhs.quickmem.presentation.StandardViewModel
+import com.pwhs.quickmem.presentation.app.home.HomeUiAction
+import com.pwhs.quickmem.presentation.app.home.HomeViewModel
 import com.pwhs.quickmem.presentation.app.study_set.component.StudyCardBottomSheet
 import com.pwhs.quickmem.presentation.app.study_set.studies.flip.component.FlipFlashCardButton
 import com.pwhs.quickmem.presentation.app.study_set.studies.flip.component.FlipFlashCardFinish
@@ -54,7 +54,7 @@ import com.pwhs.quickmem.presentation.app.study_set.studies.flip.component.FlipF
 import com.pwhs.quickmem.presentation.app.study_set.studies.flip.component.StudyFlipFlashCard
 import com.pwhs.quickmem.presentation.app.study_set.studies.component.StudyTopAppBar
 import com.pwhs.quickmem.presentation.app.study_set.studies.component.UnfinishedLearningBottomSheet
-import com.pwhs.quickmem.presentation.component.LoadingOverlay
+import com.pwhs.quickmem.presentation.components.LoadingOverlay
 import com.pwhs.quickmem.ui.theme.QuickMemTheme
 import com.pwhs.quickmem.utils.toColor
 import com.ramcosta.composedestinations.annotation.Destination
@@ -70,7 +70,7 @@ fun FlipFlashCardScreen(
     modifier: Modifier = Modifier,
     resultNavigator: ResultBackNavigator<Boolean>,
     viewModel: FlipFlashCardViewModel = hiltViewModel(),
-    standardViewModel: StandardViewModel = hiltViewModel(),
+    homeViewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -79,7 +79,7 @@ fun FlipFlashCardScreen(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 FlipFlashCardUiEvent.Finished -> {
-                    standardViewModel.onEvent(StandardUiAction.UpdateStreak)
+                    homeViewModel.onEvent(HomeUiAction.UpdateStreak)
                     Toast.makeText(
                         context,
                         context.getString(R.string.txt_you_have_finished),

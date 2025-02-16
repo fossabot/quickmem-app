@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pwhs.quickmem.R
 import com.pwhs.quickmem.core.data.enums.AuthProvider
-import com.pwhs.quickmem.core.datastore.AppManager
 import com.pwhs.quickmem.core.utils.Resources
 import com.pwhs.quickmem.domain.model.auth.SignupRequestModel
 import com.pwhs.quickmem.domain.repository.AuthRepository
@@ -20,14 +19,12 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import timber.log.Timber
 import java.util.Random
 import javax.inject.Inject
 
 @HiltViewModel
 class SignupWithEmailViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val appManager: AppManager,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SignUpWithEmailUiState())
     val uiState = _uiState.asStateFlow()
@@ -92,66 +89,25 @@ class SignupWithEmailViewModel @Inject constructor(
 
     private fun signUp() {
         viewModelScope.launch {
-            authRepository.checkEmailValidity(_uiState.value.email).collect { resource ->
-                when (resource) {
+            val avatarUrl = Random().nextInt(126).toString()
+            val username = uiState.value.email.getUsernameFromEmail()
+            val fullName = uiState.value.email.getNameFromEmail()
+
+            authRepository.signup(
+                signUpRequestModel = SignupRequestModel(
+                    avatarUrl = avatarUrl,
+                    email = uiState.value.email,
+                    username = username,
+                    fullName = fullName,
+                    role = uiState.value.userRole,
+                    birthday = uiState.value.birthday,
+                    password = uiState.value.password,
+                    authProvider = AuthProvider.EMAIL.name
+                )
+            ).collectLatest { signup ->
+                when (signup) {
                     is Resources.Error -> {
-                        Timber.e(resource.message)
-                        _uiState.update {
-                            it.copy(
-                                emailError = R.string.txt_email_is_already_registered,
-                                isLoading = false
-                            )
-                        }
-                        _uiEvent.send(SignUpWithEmailUiEvent.SignUpFailure(R.string.txt_email_is_already_registered))
-                    }
-
-                    is Resources.Loading -> {
-                        _uiState.update { it.copy(isLoading = true) }
-                    }
-
-                    is Resources.Success -> {
-                        if (resource.data == true) {
-                            val avatarUrl = Random().nextInt(126).toString()
-                            val username = uiState.value.email.getUsernameFromEmail()
-                            val fullName = uiState.value.email.getNameFromEmail()
-
-                            authRepository.signup(
-                                signUpRequestModel = SignupRequestModel(
-                                    avatarUrl = avatarUrl,
-                                    email = uiState.value.email,
-                                    username = username,
-                                    fullName = fullName,
-                                    role = uiState.value.userRole,
-                                    birthday = uiState.value.birthday,
-                                    password = uiState.value.password,
-                                    authProvider = AuthProvider.EMAIL.name
-                                )
-                            ).collectLatest { signup ->
-                                when (signup) {
-                                    is Resources.Error -> {
-                                        Timber.e(signup.message)
-                                        _uiState.update {
-                                            it.copy(
-                                                isLoading = false,
-                                                emailError = R.string.txt_something_went_wrong
-                                            )
-                                        }
-                                        _uiEvent.send(SignUpWithEmailUiEvent.SignUpFailure(R.string.txt_something_went_wrong))
-                                    }
-
-                                    is Resources.Loading -> {
-                                        // Do nothing
-                                    }
-
-                                    is Resources.Success -> {
-                                        _uiState.update { it.copy(isLoading = false) }
-                                        appManager.saveUserBirthday(uiState.value.birthday)
-                                        _uiEvent.send(SignUpWithEmailUiEvent.SignUpSuccess)
-                                    }
-                                }
-
-                            }
-                        } else {
+                        if (signup.status == 409 || signup.status == 412) {
                             _uiState.update {
                                 it.copy(
                                     emailError = R.string.txt_email_is_already_registered,
@@ -159,9 +115,27 @@ class SignupWithEmailViewModel @Inject constructor(
                                 )
                             }
                             _uiEvent.send(SignUpWithEmailUiEvent.SignUpFailure(R.string.txt_email_is_already_registered))
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    emailError = R.string.txt_something_went_wrong,
+                                    isLoading = false
+                                )
+                            }
+                            _uiEvent.send(SignUpWithEmailUiEvent.SignUpFailure(R.string.txt_something_went_wrong))
                         }
                     }
+
+                    is Resources.Loading -> {
+                        // Do nothing
+                    }
+
+                    is Resources.Success -> {
+                        _uiState.update { it.copy(isLoading = false) }
+                        _uiEvent.send(SignUpWithEmailUiEvent.SignUpSuccess)
+                    }
                 }
+
             }
         }
     }
@@ -170,7 +144,7 @@ class SignupWithEmailViewModel @Inject constructor(
         var isValid = true
 
         if (!uiState.value.email.validEmail() || uiState.value.email.isEmpty()) {
-            _uiState.update { it.copy(emailError = R.string.txt_invalid_email) }
+            _uiState.update { it.copy(emailError = R.string.txt_invalid_email_address) }
             isValid = false
         } else {
             _uiState.update { it.copy(emailError = null) }

@@ -8,12 +8,14 @@ import com.pwhs.quickmem.core.datastore.AppManager
 import com.pwhs.quickmem.core.datastore.TokenManager
 import com.pwhs.quickmem.core.utils.Resources
 import com.pwhs.quickmem.domain.model.notification.DeviceTokenRequestModel
+import com.pwhs.quickmem.domain.model.streak.StreakModel
 import com.pwhs.quickmem.domain.model.subject.GetTop5SubjectResponseModel
 import com.pwhs.quickmem.domain.model.subject.SubjectModel
 import com.pwhs.quickmem.domain.repository.ClassRepository
 import com.pwhs.quickmem.domain.repository.FirebaseRepository
 import com.pwhs.quickmem.domain.repository.FolderRepository
 import com.pwhs.quickmem.domain.repository.NotificationRepository
+import com.pwhs.quickmem.domain.repository.StreakRepository
 import com.pwhs.quickmem.domain.repository.StudySetRepository
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Purchases
@@ -30,6 +32,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.LocalDate
+import java.time.OffsetDateTime
 import javax.inject.Inject
 
 @HiltViewModel
@@ -39,6 +43,7 @@ class HomeViewModel @Inject constructor(
     private val classRepository: ClassRepository,
     private val notificationRepository: NotificationRepository,
     private val firebaseRepository: FirebaseRepository,
+    private val streakRepository: StreakRepository,
     private val tokenManager: TokenManager,
     private val appManager: AppManager,
 ) : ViewModel() {
@@ -73,6 +78,7 @@ class HomeViewModel @Inject constructor(
                 getTop5Subjects(token = token)
                 getCustomerInfo()
                 loadNotifications(token = token, userId = userId)
+                getStreaksByUserId(token = token, userId = userId)
             } else {
                 _uiEvent.send(HomeUiEvent.UnAuthorized)
             }
@@ -95,20 +101,16 @@ class HomeViewModel @Inject constructor(
                 }
             }
 
-            is HomeUiAction.LoadNotifications -> {
+            is HomeUiAction.RefreshHome -> {
+                initData()
+            }
+
+            is HomeUiAction.UpdateStreak -> {
                 viewModelScope.launch {
                     val token = tokenManager.accessToken.firstOrNull() ?: ""
                     val userId = appManager.userId.firstOrNull() ?: ""
-                    loadNotifications(token = token, userId = userId)
+                    updateStreak(token, userId)
                 }
-            }
-
-            is HomeUiAction.MarkAsRead -> {
-                markNotificationAsRead(event.notificationId)
-            }
-
-            is HomeUiAction.RefreshHome -> {
-                initData()
             }
         }
     }
@@ -141,7 +143,6 @@ class HomeViewModel @Inject constructor(
                         val notificationCount = result.data?.count { !it.isRead } ?: 0
                         state.copy(
                             isLoading = false,
-                            notifications = result.data ?: emptyList(),
                             notificationCount = notificationCount,
                             error = null
                         )
@@ -152,34 +153,6 @@ class HomeViewModel @Inject constructor(
                             isLoading = false,
                             error = R.string.txt_failed_to_load_notifications
                         )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun markNotificationAsRead(notificationId: String) {
-        viewModelScope.launch {
-            val token = tokenManager.accessToken.firstOrNull() ?: ""
-            notificationRepository.markNotificationAsRead(notificationId, token).collect { result ->
-                when (result) {
-                    is Resources.Success -> _uiState.update { state ->
-                        state.copy(
-                            notifications = state.notifications.map { notification ->
-                                if (notification.id == notificationId) notification.copy(isRead = true) else notification
-                            },
-                            notificationCount = state.notificationCount - 1,
-                        )
-                    }
-
-                    is Resources.Error -> {
-                        _uiState.update {
-                            it.copy(error = R.string.txt_failed_to_mark_notification_as_read)
-                        }
-                    }
-
-                    is Resources.Loading -> {
-                        // do nothing
                     }
                 }
             }
@@ -322,5 +295,74 @@ class HomeViewModel @Inject constructor(
                 deviceTokenRequest = deviceTokenRequest
             ).collect()
         }
+    }
+
+    private fun getStreaksByUserId(token: String, userId: String) {
+        viewModelScope.launch {
+            streakRepository.getStreaksByUserId(token, userId).collect { resource ->
+                when (resource) {
+                    is Resources.Loading -> {
+                        _uiState.value = _uiState.value.copy(isLoading = true)
+                    }
+
+                    is Resources.Success -> {
+                        val streaks = resource.data?.streaks ?: emptyList()
+                        val streakDates = calculateStreakDates(streaks)
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            streaks = streaks,
+                            streakDates = streakDates,
+                            streakCount = streaks.lastOrNull()?.streakCount ?: 0
+                        )
+                    }
+
+                    is Resources.Error -> {
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateStreak(token: String, userId: String) {
+        viewModelScope.launch {
+            streakRepository.updateStreak(token, userId).collect { resource ->
+                when (resource) {
+                    is Resources.Loading -> {
+                        _uiState.update {
+                            it.copy(isLoading = true)
+                        }
+                    }
+
+                    is Resources.Success -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                streakCount = resource.data?.streakCount ?: 0,
+                                streakDates = resource.data?.date?.let { date ->
+                                    listOf(OffsetDateTime.parse(date).toLocalDate())
+                                } ?: emptyList()
+                            )
+                        }
+                    }
+
+                    is Resources.Error -> {
+                        _uiState.update {
+                            it.copy(isLoading = false)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun calculateStreakDates(streaks: List<StreakModel>): List<LocalDate> {
+        return streaks.flatMap { streak ->
+            val firstStreakDate = OffsetDateTime.parse(streak.date).toLocalDate()
+            (0 until streak.streakCount).map {
+                firstStreakDate.minusDays(it.toLong())
+            }
+        }.distinct()
     }
 }

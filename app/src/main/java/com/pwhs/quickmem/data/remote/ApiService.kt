@@ -47,11 +47,13 @@ import com.pwhs.quickmem.data.dto.flashcard.CreateFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.EditFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.FlashCardResponseDto
 import com.pwhs.quickmem.data.dto.flashcard.FlipFlashCardDto
+import com.pwhs.quickmem.data.dto.flashcard.LanguageDto
 import com.pwhs.quickmem.data.dto.flashcard.QuizStatusFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.RatingFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.ToggleStarredFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.TrueFalseStatusFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.UpdateFlashCardResponseDto
+import com.pwhs.quickmem.data.dto.flashcard.VoiceDto
 import com.pwhs.quickmem.data.dto.folder.AddFolderToClassRequestDto
 import com.pwhs.quickmem.data.dto.folder.CreateFolderRequestDto
 import com.pwhs.quickmem.data.dto.folder.CreateFolderResponseDto
@@ -93,7 +95,6 @@ import com.pwhs.quickmem.data.dto.user.SearchUserResponseDto
 import com.pwhs.quickmem.data.dto.user.UpdateCoinRequestDto
 import com.pwhs.quickmem.data.dto.user.UpdateCoinResponseDto
 import com.pwhs.quickmem.data.dto.user.UserDetailResponseDto
-import com.pwhs.quickmem.data.dto.verify_email.EmailRequestDto
 import com.pwhs.quickmem.data.dto.verify_email.EmailVerificationResponse
 import okhttp3.MultipartBody
 import retrofit2.Response
@@ -108,16 +109,9 @@ import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
-import retrofit2.http.Url
 
 interface ApiService {
-    // Auth
-    @POST
-    suspend fun checkEmail(
-        @Url url: String,
-        @Body emailRequestDto: EmailRequestDto,
-    ): EmailVerificationResponse
-
+    // Aut
     @POST("auth/signup")
     suspend fun signUp(@Body signupRequestDto: SignupRequestDto): SignupResponseDto
 
@@ -255,10 +249,9 @@ interface ApiService {
         @Path("id") id: String,
     ): GetStudySetResponseDto
 
-    @GET("study-set/owner/{ownerId}")
+    @GET("study-set/owner/")
     suspend fun getStudySetsByOwnerId(
         @Header("Authorization") token: String,
-        @Path("ownerId") ownerId: String,
         @Query("classId") classId: String? = null,
         @Query("folderId") folderId: String? = null,
     ): List<GetStudySetResponseDto>
@@ -437,6 +430,17 @@ interface ApiService {
         @Query("isSwapped") isSwapped: Boolean? = null,
         @Query("isRandom") isRandom: Boolean? = null,
     ): List<FlashCardResponseDto>
+
+    @GET("flashcard/languages")
+    suspend fun getLanguages(
+        @Header("Authorization") token: String,
+    ): List<LanguageDto>
+
+    @GET("flashcard/voices/{languageCode}")
+    suspend fun getVoices(
+        @Header("Authorization") token: String,
+        @Path("languageCode") languageCode: String,
+    ): List<VoiceDto>
 
     // Folder
     @POST("folder")
@@ -661,6 +665,11 @@ interface ApiService {
     suspend fun deleteNotification(
         @Header("Authorization") token: String,
         @Path("id") notificationId: String,
+    )
+
+    @POST("notifications/clear")
+    suspend fun clearAllNotifications(
+        @Header("Authorization") token: String,
     )
 
     // Study Time

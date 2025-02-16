@@ -58,9 +58,9 @@ import com.pwhs.quickmem.presentation.app.settings.component.SettingItem
 import com.pwhs.quickmem.presentation.app.settings.component.SettingSwitch
 import com.pwhs.quickmem.presentation.app.settings.component.SettingTitleSection
 import com.pwhs.quickmem.presentation.app.settings.component.SettingValidatePasswordBottomSheet
-import com.pwhs.quickmem.presentation.component.LoadingOverlay
-import com.pwhs.quickmem.presentation.component.QuickMemAlertDialog
-import com.pwhs.quickmem.presentation.component.QuickmemTimePicker
+import com.pwhs.quickmem.presentation.components.LoadingOverlay
+import com.pwhs.quickmem.presentation.components.QuickMemAlertDialog
+import com.pwhs.quickmem.presentation.components.QuickmemTimePicker
 import com.pwhs.quickmem.ui.theme.QuickMemTheme
 import com.pwhs.quickmem.utils.getLanguageCode
 import com.pwhs.quickmem.utils.toFormattedString
@@ -251,7 +251,7 @@ fun SettingsScreen(
         onNavigateToHelpCenter = {
             val intent = Intent(
                 Intent.ACTION_VIEW,
-                Uri.parse("https://github.com/pass-with-high-score/quick_mem/issues")
+                Uri.parse("https://github.com/pass-with-high-score/quickmem-app/issues")
             )
             try {
                 context.startActivity(intent)
@@ -338,7 +338,6 @@ fun Setting(
     onSubmitClick: () -> Unit = {},
     onNavigationBack: () -> Unit = {},
     onNavigateToChangePassword: () -> Unit = {},
-    onNavigateToManageStorage: () -> Unit = {},
     onEnablePushNotifications: (Boolean) -> Unit = {},
     onNotificationEnabled: (Boolean) -> Unit = {},
     onNavigateToPrivacyPolicy: () -> Unit = {},
