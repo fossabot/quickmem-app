@@ -27,20 +27,28 @@ data class CreateFlashCardUiState(
     val showExplanation: Boolean = false,
     val isCreated: Boolean = false,
     val isLoading: Boolean = false,
-    val queryImage: String = "",
-    val searchImageResponseModel: SearchImageResponseModel? = null,
-    val isSearchImageLoading: Boolean = false,
+    val termQueryImage: String = "",
+    val termSearchImageResponseModel: SearchImageResponseModel? = null,
+    val isSearchTermImageLoading: Boolean = false,
+    val definitionQueryImage: String = "",
+    val definitionSearchImageResponseModel: SearchImageResponseModel? = null,
+    val isSearchDefinitionImageLoading: Boolean = false,
     val studyColorModel: ColorModel? = null,
     val languageModels: List<LanguageModel> = emptyList(),
     val languageLocale: String = "",
+    val previousDefinitionVoiceCode: String = "",
+    val previousTermVoiceCode: String = "",
 )
 
 fun CreateFlashCardUiState.toCreateFlashCardModel(): CreateFlashCardModel {
     return CreateFlashCardModel(
         studySetId = studySetId,
         term = term.trim(),
+        termImageURL = termImageURL,
+        termVoiceCode = termVoiceCode?.code,
         definition = definition.trim(),
         definitionImageURL = definitionImageURL,
+        definitionVoiceCode = definitionVoiceCode?.code,
         hint = hint?.trim(),
         explanation = explanation?.trim(),
     )

@@ -1,8 +1,8 @@
 package com.pwhs.quickmem.presentation.app.flashcard.create
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pwhs.quickmem.core.datastore.TokenManager
 import com.pwhs.quickmem.core.utils.Resources
@@ -10,7 +10,6 @@ import com.pwhs.quickmem.domain.model.color.ColorModel
 import com.pwhs.quickmem.domain.repository.FlashCardRepository
 import com.pwhs.quickmem.domain.repository.PixaBayRepository
 import com.pwhs.quickmem.domain.repository.UploadImageRepository
-import com.pwhs.quickmem.utils.getLanguageCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -30,8 +29,7 @@ class CreateFlashCardViewModel @Inject constructor(
     private val uploadImageRepository: UploadImageRepository,
     private val pixaBayRepository: PixaBayRepository,
     private val tokenManager: TokenManager,
-    application: Application,
-) : AndroidViewModel(application) {
+) : ViewModel() {
     private val _uiState = MutableStateFlow(CreateFlashCardUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -43,16 +41,19 @@ class CreateFlashCardViewModel @Inject constructor(
     init {
         val studySetId: String = savedStateHandle.get<String>("studySetId") ?: ""
         val studySetColorId: Int = savedStateHandle.get<Int>("studySetColorId") ?: 1
+        val previousDefinitionVoiceCode: String =
+            savedStateHandle.get<String>("previousDefinitionVoiceCode") ?: ""
+        val previousTermVoiceCode: String =
+            savedStateHandle.get<String>("previousTermVoiceCode") ?: ""
         _uiState.update {
             it.copy(
                 studySetId = studySetId,
-                studyColorModel = ColorModel.defaultColors.first { it.id == studySetColorId })
+                studyColorModel = ColorModel.defaultColors.first { it.id == studySetColorId },
+                previousDefinitionVoiceCode = previousDefinitionVoiceCode,
+                previousTermVoiceCode = previousTermVoiceCode
+            )
         }
-        viewModelScope.launch {
-            val languageLocale = getApplication<Application>().getLanguageCode()
-            _uiState.update { it.copy(languageLocale = languageLocale) }
-            getLanguages(isInit = true, languageCode = languageLocale)
-        }
+        getLanguages()
     }
 
     fun onEvent(event: CreateFlashCardUiAction) {
@@ -100,114 +101,15 @@ class CreateFlashCardViewModel @Inject constructor(
             }
 
             is CreateFlashCardUiAction.UploadImage -> {
-
-                viewModelScope.launch {
-                    val token = tokenManager.accessToken.firstOrNull() ?: ""
-                    uploadImageRepository.uploadImage(token, event.imageUri)
-                        .collect { resource ->
-                            when (resource) {
-                                is Resources.Success -> {
-                                    _uiState.update {
-                                        it.copy(
-                                            definitionImageURL = resource.data!!.url,
-                                            isLoading = false
-                                        )
-                                    }
-                                }
-
-                                is Resources.Error -> {
-                                    Timber.e("Error: ${resource.message}")
-                                    _uiState.update { it.copy(isLoading = false) }
-                                }
-
-                                is Resources.Loading -> {
-                                    _uiState.update {
-                                        it.copy(isLoading = true)
-                                    }
-                                }
-                            }
-                        }
-                }
+                onUploadImage(event.imageUri, event.isTerm)
             }
 
             is CreateFlashCardUiAction.RemoveImage -> {
-                viewModelScope.launch {
-                    val token = tokenManager.accessToken.firstOrNull() ?: ""
-                    uploadImageRepository.removeImage(token, event.imageURL)
-                        .collect { resource ->
-                            when (resource) {
-                                is Resources.Success -> {
-                                    _uiState.update {
-                                        it.copy(
-                                            definitionImageURL = "",
-                                            definitionImageUri = null,
-                                            isLoading = false
-                                        )
-                                    }
-                                }
-
-                                is Resources.Error -> {
-                                    Timber.e("Error: ${resource.message}")
-                                    _uiState.update { it.copy(isLoading = false) }
-                                }
-
-                                is Resources.Loading -> {
-                                    _uiState.update {
-                                        it.copy(isLoading = true)
-                                    }
-                                }
-                            }
-                        }
-                }
+                removeImage(event.imageURL)
             }
 
-            is CreateFlashCardUiAction.OnQueryImageChanged -> {
-                _uiState.update {
-                    it.copy(
-                        queryImage = event.query,
-                        isSearchImageLoading = true
-                    )
-                }
-                if (event.query.length < 3) {
-                    return
-                }
-
-                job?.cancel()
-                job = viewModelScope.launch {
-                    pixaBayRepository.searchImages(
-                        token = tokenManager.accessToken.firstOrNull() ?: "",
-                        query = event.query
-                    ).collect { resource ->
-                        when (resource) {
-                            is Resources.Success -> {
-                                _uiState.update {
-                                    it.copy(
-                                        searchImageResponseModel = resource.data,
-                                        isSearchImageLoading = false
-                                    )
-                                }
-                            }
-
-                            is Resources.Error -> {
-                                Timber.e("Error: ${resource.message}")
-                                _uiState.update {
-                                    it.copy(
-                                        searchImageResponseModel = null,
-                                        isSearchImageLoading = false
-                                    )
-                                }
-                            }
-
-                            is Resources.Loading -> {
-                                _uiState.update {
-                                    it.copy(
-                                        isSearchImageLoading = true
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+            is CreateFlashCardUiAction.OnQueryTermImageChanged -> {
+                onSearchImage(event.query)
             }
 
             is CreateFlashCardUiAction.OnDefinitionImageChanged -> {
@@ -218,45 +120,68 @@ class CreateFlashCardViewModel @Inject constructor(
                 }
             }
 
-            is CreateFlashCardUiAction.OnSelectLanguageClicked -> {
-                if (event.isTerm) {
-                    _uiState.update {
-                        it.copy(
-                            termLanguageModel = event.languageModel
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            definitionLanguageModel = event.languageModel
-                        )
-                    }
+            is CreateFlashCardUiAction.OnSelectTermLanguageClicked -> {
+                _uiState.update {
+                    it.copy(
+                        termLanguageModel = event.languageModel
+                    )
                 }
                 getVoices(
-                    isTerm = event.isTerm,
+                    isTerm = true,
                     languageCode = event.languageModel.code,
                     isInit = false
                 )
             }
 
-            is CreateFlashCardUiAction.OnSelectVoiceClicked -> {
-                if (event.isTerm) {
-                    _uiState.update {
-                        it.copy(
-                            termVoiceCode = event.voiceModel
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            definitionVoiceCode = event.voiceModel
-                        )
-                    }
+            is CreateFlashCardUiAction.OnSelectTermVoiceClicked -> {
+                _uiState.update {
+                    it.copy(
+                        termVoiceCode = event.voiceModel
+                    )
                 }
             }
 
-            is CreateFlashCardUiAction.FlashCardTermImageChanged -> TODO()
-            is CreateFlashCardUiAction.OnTermImageChanged -> TODO()
+            is CreateFlashCardUiAction.FlashCardTermImageChanged -> {
+                _uiState.update {
+                    it.copy(
+                        termImageUri = event.termImageUri,
+                    )
+                }
+            }
+
+            is CreateFlashCardUiAction.OnTermImageChanged -> {
+                _uiState.update {
+                    it.copy(
+                        termImageURL = event.termImageURL,
+                    )
+                }
+            }
+
+            is CreateFlashCardUiAction.OnSelectDefinitionLanguageClicked -> {
+                _uiState.update {
+                    it.copy(
+                        definitionLanguageModel = event.languageModel
+                    )
+                }
+
+                getVoices(
+                    isTerm = false,
+                    languageCode = event.languageModel.code,
+                    isInit = false
+                )
+            }
+
+            is CreateFlashCardUiAction.OnSelectDefinitionVoiceClicked -> {
+                _uiState.update {
+                    it.copy(
+                        definitionVoiceCode = event.voiceModel
+                    )
+                }
+            }
+
+            is CreateFlashCardUiAction.OnQueryDefinitionImageChanged -> {
+                onSearchImage(event.query, isTerm = false)
+            }
         }
     }
 
@@ -269,20 +194,19 @@ class CreateFlashCardViewModel @Inject constructor(
             ).collect { resource ->
                 when (resource) {
                     is Resources.Error -> {
-                        Timber.e("Error: ${resource.message}")
                         _uiState.update { it.copy(isLoading = false) }
                     }
 
                     is Resources.Loading -> {
-                        Timber.d("Loading")
                         _uiState.update { it.copy(isLoading = true) }
                     }
 
                     is Resources.Success -> {
-                        Timber.d("FlashCard saved: ${resource.data}")
                         _uiState.update {
                             it.copy(
                                 term = "",
+                                termImageURL = null,
+                                termImageUri = null,
                                 definition = "",
                                 definitionImageURL = null,
                                 definitionImageUri = null,
@@ -299,20 +223,27 @@ class CreateFlashCardViewModel @Inject constructor(
         }
     }
 
-    private fun getLanguages(isInit: Boolean, languageCode: String = "") {
+    private fun getLanguages(isInit: Boolean = true) {
         viewModelScope.launch {
             val token = tokenManager.accessToken.firstOrNull() ?: ""
+            val termLanguageCode =
+                _uiState.value.previousTermVoiceCode.split("-").take(2).joinToString("-")
+            val definitionLanguageCode =
+                _uiState.value.previousDefinitionVoiceCode.split("-").take(2).joinToString("-")
             flashCardRepository.getLanguages(token = token).collect { resource ->
                 when (resource) {
                     is Resources.Success -> {
                         _uiState.update {
-                            val selectLanguage =
-                                resource.data?.firstOrNull { it.code.contains(languageCode) }
+                            val termSelectLanguage =
+                                resource.data?.firstOrNull { it.code.contains(termLanguageCode) }
+                            val definitionLanguage =
+                                resource.data?.firstOrNull { it.code.contains(definitionLanguageCode) }
 
                             it.copy(
                                 languageModels = resource.data ?: emptyList(),
-                                termLanguageModel = selectLanguage ?: resource.data?.firstOrNull(),
-                                definitionLanguageModel = selectLanguage
+                                termLanguageModel = termSelectLanguage
+                                    ?: resource.data?.firstOrNull(),
+                                definitionLanguageModel = definitionLanguage
                                     ?: resource.data?.firstOrNull()
                             )
                         }.also {
@@ -354,14 +285,22 @@ class CreateFlashCardViewModel @Inject constructor(
                                 _uiState.update {
                                     it.copy(
                                         termVoicesModel = resource.data ?: emptyList(),
-                                        termVoiceCode = if (isInit) resource.data?.firstOrNull() else null
+                                        termVoiceCode = if (isInit) {
+                                            resource.data?.firstOrNull { it.code == _uiState.value.previousTermVoiceCode }
+                                        } else {
+                                            null
+                                        }
                                     )
                                 }
                             } else {
                                 _uiState.update {
                                     it.copy(
                                         definitionVoicesModel = resource.data ?: emptyList(),
-                                        definitionVoiceCode = if (isInit) resource.data?.firstOrNull() else null
+                                        definitionVoiceCode = if (isInit) {
+                                            resource.data?.firstOrNull { it.code == _uiState.value.previousDefinitionVoiceCode }
+                                        } else {
+                                            null
+                                        }
                                     )
                                 }
                             }
@@ -373,6 +312,157 @@ class CreateFlashCardViewModel @Inject constructor(
 
                         is Resources.Loading -> {
                             Timber.d("Loading")
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun removeImage(imageURL: String, isTerm: Boolean = true) {
+        viewModelScope.launch {
+            val token = tokenManager.accessToken.firstOrNull() ?: ""
+            uploadImageRepository.removeImage(token, imageURL)
+                .collect { resource ->
+                    when (resource) {
+                        is Resources.Success -> {
+                            _uiState.update {
+                                it.copy(
+                                    definitionImageURL = if (!isTerm) null else it.definitionImageURL,
+                                    definitionImageUri = if (!isTerm) null else it.definitionImageUri,
+                                    termImageURL = if (isTerm) null else it.termImageURL,
+                                    termImageUri = if (isTerm) null else it.termImageUri,
+                                    isLoading = false
+                                )
+                            }
+                        }
+
+                        is Resources.Error -> {
+                            Timber.e("Error: ${resource.message}")
+                            _uiState.update { it.copy(isLoading = false) }
+                        }
+
+                        is Resources.Loading -> {
+                            _uiState.update {
+                                it.copy(isLoading = true)
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun onSearchImage(query: String, isTerm: Boolean = true) {
+        if (isTerm) {
+            _uiState.update {
+                it.copy(
+                    termQueryImage = query,
+                    isSearchTermImageLoading = true
+                )
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    definitionQueryImage = query,
+                    isSearchDefinitionImageLoading = true
+                )
+            }
+        }
+        if (query.isEmpty()) {
+            return
+        }
+
+        job?.cancel()
+        job = viewModelScope.launch {
+            pixaBayRepository.searchImages(
+                token = tokenManager.accessToken.firstOrNull() ?: "",
+                query = query
+            ).collect { resource ->
+                when (resource) {
+                    is Resources.Success -> {
+                        if (isTerm) {
+                            _uiState.update {
+                                it.copy(
+                                    termSearchImageResponseModel = resource.data,
+                                    isSearchTermImageLoading = false
+                                )
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    definitionSearchImageResponseModel = resource.data,
+                                    isSearchDefinitionImageLoading = false
+                                )
+                            }
+                        }
+                    }
+
+                    is Resources.Error -> {
+                        Timber.e("Error: ${resource.message}")
+                        if (isTerm) {
+                            _uiState.update {
+                                it.copy(
+                                    termSearchImageResponseModel = null,
+                                    isSearchTermImageLoading = false
+                                )
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    definitionSearchImageResponseModel = null,
+                                    isSearchDefinitionImageLoading = false
+                                )
+                            }
+                        }
+                    }
+
+                    is Resources.Loading -> {
+                        if (isTerm) {
+                            _uiState.update {
+                                it.copy(
+                                    isSearchTermImageLoading = true
+                                )
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    isSearchDefinitionImageLoading = true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun onUploadImage(imageUri: Uri, isTerm: Boolean = true) {
+        viewModelScope.launch {
+            val token = tokenManager.accessToken.firstOrNull() ?: ""
+            uploadImageRepository
+                .uploadImage(token, imageUri)
+                .collect { resource ->
+                    when (resource) {
+                        is Resources.Success -> {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    termImageURL = if (isTerm) resource.data?.url else it.termImageURL,
+                                    termImageUri = if (isTerm) null else it.termImageUri,
+                                    definitionImageURL = if (!isTerm) resource.data?.url else it.definitionImageURL,
+                                    definitionImageUri = if (!isTerm) null else it.definitionImageUri
+                                )
+                            }
+                        }
+
+                        is Resources.Error -> {
+                            Timber.e("Error: ${resource.message}")
+                            _uiState.update { it.copy(isLoading = false) }
+                        }
+
+                        is Resources.Loading -> {
+                            _uiState.update {
+                                it.copy(isLoading = true)
+                            }
                         }
                     }
                 }

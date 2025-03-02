@@ -178,9 +178,6 @@ fun StudySetDetailScreen(
     LaunchedEffect(key1 = true) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                is StudySetDetailUiEvent.FlashCardDeleted -> {
-                    viewModel.onEvent(StudySetDetailUiAction.Refresh)
-                }
 
                 is StudySetDetailUiEvent.FlashCardStarred -> {
                     viewModel.onEvent(StudySetDetailUiAction.Refresh)
@@ -213,8 +210,11 @@ fun StudySetDetailScreen(
                         EditFlashCardScreenDestination(
                             flashcardId = flashCard.id,
                             term = flashCard.term,
+                            termImageUrl = flashCard.termImageURL ?: "",
+                            termVoiceCode = flashCard.termVoiceCode ?: "",
                             definition = flashCard.definition,
                             definitionImageUrl = flashCard.definitionImageURL ?: "",
+                            definitionVoiceCode = flashCard.definitionVoiceCode ?: "",
                             hint = flashCard.hint ?: "",
                             explanation = flashCard.explanation ?: "",
                             studySetColorId = uiState.colorModel.id
@@ -335,7 +335,9 @@ fun StudySetDetailScreen(
             navigator.navigate(
                 CreateFlashCardScreenDestination(
                     studySetId = uiState.id,
-                    studySetColorId = uiState.colorModel.id
+                    studySetColorId = uiState.colorModel.id,
+                    previousTermVoiceCode = uiState.previousTermVoiceCode,
+                    previousDefinitionVoiceCode = uiState.previousDefinitionVoiceCode
                 )
             )
         },
@@ -368,9 +370,6 @@ fun StudySetDetailScreen(
         },
         onEditFlashCard = {
             viewModel.onEvent(StudySetDetailUiAction.OnEditFlashCardClicked)
-        },
-        onToggleStarredFlashCard = { id, isStarred ->
-            viewModel.onEvent(StudySetDetailUiAction.OnStarFlashCardClicked(id, isStarred))
         },
         onEditStudySet = {
             viewModel.onEvent(StudySetDetailUiAction.OnEditStudySetClicked)
@@ -422,6 +421,22 @@ fun StudySetDetailScreen(
         onNavigateToLearn = { learnMode, isGetAll ->
             viewModel.onEvent(StudySetDetailUiAction.NavigateToLearn(learnMode, isGetAll))
         },
+        onGetSpeech = { flashcardId, term, definition, termVoiceCode, definitionVoiceCode, onTermSpeakStart, onTermSpeakEnd, onDefinitionSpeakStart, onDefinitionSpeakEnd ->
+            viewModel.onEvent(
+                StudySetDetailUiAction.OnGetSpeech(
+                    flashcardId,
+                    term,
+                    definition,
+                    termVoiceCode,
+                    definitionVoiceCode,
+                    onTermSpeakStart,
+                    onTermSpeakEnd,
+                    onDefinitionSpeakStart,
+                    onDefinitionSpeakEnd
+                )
+            )
+        },
+        flashcardCurrentPlayId = uiState.flashcardCurrentPlayId,
     )
 }
 
@@ -445,7 +460,6 @@ fun StudySetDetail(
     onDeleteFlashCard: () -> Unit = {},
     onEditFlashCard: () -> Unit = {},
     onNavigateToStudySetInfo: () -> Unit = {},
-    onToggleStarredFlashCard: (String, Boolean) -> Unit = { _, _ -> },
     onEditStudySet: () -> Unit = {},
     onAddToClass: () -> Unit = {},
     onAddToFolder: () -> Unit = {},
@@ -456,6 +470,18 @@ fun StudySetDetail(
     onCopyStudySet: () -> Unit = {},
     onReportClick: () -> Unit = {},
     onNavigateToLearn: (LearnMode, Boolean) -> Unit = { _, _ -> },
+    onGetSpeech: (
+        flashcardId: String,
+        term: String,
+        definition: String,
+        termVoiceCode: String,
+        definitionVoiceCode: String,
+        onTermSpeakStart: () -> Unit,
+        onTermSpeakEnd: () -> Unit,
+        onDefinitionSpeakStart: () -> Unit,
+        onDefinitionSpeakEnd: () -> Unit
+    ) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
+    flashcardCurrentPlayId: String = "",
 ) {
     val context = LocalContext.current
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -546,7 +572,6 @@ fun StudySetDetail(
                                 flashCards = flashCards,
                                 onFlashcardClick = onFlashCardClick,
                                 onDeleteFlashCardClick = onDeleteFlashCard,
-                                onToggleStarClick = onToggleStarredFlashCard,
                                 onEditFlashCardClick = onEditFlashCard,
                                 onAddFlashCardClick = onAddFlashcard,
                                 onNavigateToLearn = onNavigateToLearn,
@@ -557,6 +582,8 @@ fun StudySetDetail(
                                 learningPercentWrite = if (flashCardCount > 0) (flashCards.count { it.writeStatus == WriteStatus.CORRECT.status } * 100 / flashCardCount) else 0,
                                 learningPercentTrueFalse = if (flashCardCount > 0) (flashCards.count { it.trueFalseStatus == TrueFalseStatus.CORRECT.status } * 100 / flashCardCount) else 0,
                                 onMakeCopyClick = onCopyStudySet,
+                                onGetSpeech = onGetSpeech,
+                                flashcardCurrentPlayId = flashcardCurrentPlayId,
                             )
 
                             tabIndex == StudySetDetailEnum.PROGRESS.index && flashCardCount > 0 -> ProgressTabScreen(
@@ -574,13 +601,14 @@ fun StudySetDetail(
                             flashCards = flashCards,
                             onFlashcardClick = onFlashCardClick,
                             onDeleteFlashCardClick = onDeleteFlashCard,
-                            onToggleStarClick = onToggleStarredFlashCard,
                             onEditFlashCardClick = onEditFlashCard,
                             onAddFlashCardClick = onAddFlashcard,
                             onNavigateToLearn = onNavigateToLearn,
                             isOwner = false,
                             onMakeCopyClick = onCopyStudySet,
                             studySetColor = color,
+                            onGetSpeech = onGetSpeech,
+                            flashcardCurrentPlayId = flashcardCurrentPlayId,
                         )
                     }
 

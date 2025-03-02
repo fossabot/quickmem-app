@@ -2,6 +2,9 @@ package com.pwhs.quickmem.presentation.app.flashcard.create
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,9 +62,7 @@ import com.pwhs.quickmem.presentation.ads.BannerAds
 import com.pwhs.quickmem.presentation.app.flashcard.component.ChipSelectImage
 import com.pwhs.quickmem.presentation.app.flashcard.component.ExplanationCard
 import com.pwhs.quickmem.presentation.app.flashcard.component.FlashCardTextField
-import com.pwhs.quickmem.presentation.app.flashcard.component.FlashCardTextFieldContainer
 import com.pwhs.quickmem.presentation.app.flashcard.component.FlashCardTopAppBar
-import com.pwhs.quickmem.presentation.app.flashcard.component.FlashcardBottomSheet
 import com.pwhs.quickmem.presentation.app.flashcard.component.FlashcardSelectImageBottomSheet
 import com.pwhs.quickmem.presentation.app.flashcard.component.HintCard
 import com.pwhs.quickmem.presentation.app.flashcard.component.LanguageBottomSheet
@@ -73,7 +74,6 @@ import com.pwhs.quickmem.utils.bitmapToUri
 import com.pwhs.quickmem.utils.toColor
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.result.ResultBackNavigator
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -86,7 +86,6 @@ import java.io.File
 fun CreateFlashCardScreen(
     modifier: Modifier = Modifier,
     viewModel: CreateFlashCardViewModel = hiltViewModel(),
-    navigator: DestinationsNavigator,
     resultNavigator: ResultBackNavigator<Boolean>,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -121,7 +120,13 @@ fun CreateFlashCardScreen(
         term = uiState.term,
         termImageUri = uiState.termImageUri,
         termImageURL = uiState.termImageURL ?: "",
-        onTermImageChanged = { viewModel.onEvent(CreateFlashCardUiAction.FlashCardTermImageChanged(it)) },
+        onTermImageChanged = {
+            viewModel.onEvent(
+                CreateFlashCardUiAction.FlashCardTermImageChanged(
+                    it
+                )
+            )
+        },
         onTermImageUrlChanged = { viewModel.onEvent(CreateFlashCardUiAction.OnTermImageChanged(it)) },
         definition = uiState.definition,
         definitionImageUri = uiState.definitionImageUri,
@@ -178,28 +183,47 @@ fun CreateFlashCardScreen(
                 )
             )
         },
-        onUploadImage = { viewModel.onEvent(CreateFlashCardUiAction.UploadImage(it)) },
-        onDeleteImage = {
+        onUploadImage = { imageUri, isTerm ->
+            viewModel.onEvent(CreateFlashCardUiAction.UploadImage(imageUri, isTerm))
+        },
+        onDeleteImage = { isTerm ->
             viewModel.onEvent(
                 CreateFlashCardUiAction.RemoveImage(
-                    uiState.definitionImageURL ?: ""
+                    imageURL = if (isTerm) uiState.termImageURL
+                        ?: "" else uiState.definitionImageURL ?: "",
+                    isTerm = isTerm
                 )
             )
         },
         onNavigationBack = {
-            resultNavigator.setResult(uiState.isCreated)
-            navigator.navigateUp()
+            resultNavigator.navigateBack(uiState.isCreated)
         },
         onSaveFlashCardClicked = {
             viewModel.onEvent(CreateFlashCardUiAction.SaveFlashCard)
         },
-        queryImage = uiState.queryImage,
-        searchImageResponseModel = uiState.searchImageResponseModel,
-        onQueryImageChanged = { viewModel.onEvent(CreateFlashCardUiAction.OnQueryImageChanged(it)) },
+        termQueryImage = uiState.termQueryImage,
+        termSearchImageResponseModel = uiState.termSearchImageResponseModel,
+        onQueryTermImageChanged = {
+            viewModel.onEvent(
+                CreateFlashCardUiAction.OnQueryTermImageChanged(
+                    it
+                )
+            )
+        },
         onDefinitionImageUrlChanged = {
             viewModel.onEvent(CreateFlashCardUiAction.OnDefinitionImageChanged(it))
         },
-        isSearchImageLoading = uiState.isSearchImageLoading,
+        isSearchDefinitionImageLoading = uiState.isSearchDefinitionImageLoading,
+        definitionQueryImage = uiState.definitionQueryImage,
+        definitionSearchImageResponseModel = uiState.definitionSearchImageResponseModel,
+        onQueryDefinitionImageChanged = {
+            viewModel.onEvent(
+                CreateFlashCardUiAction.OnQueryDefinitionImageChanged(
+                    it
+                )
+            )
+        },
+        isSearchTermImageLoading = uiState.isSearchTermImageLoading,
         studySetColor = uiState.studyColorModel?.hexValue?.toColor() ?: colorScheme.primary,
         termLanguageModel = uiState.termLanguageModel,
         termVoiceModel = uiState.termVoiceCode,
@@ -208,11 +232,17 @@ fun CreateFlashCardScreen(
         definitionVoiceModel = uiState.definitionVoiceCode,
         definitionVoicesModel = uiState.definitionVoicesModel,
         languageModels = uiState.languageModels,
-        onSelectLanguageClicked = { languageCode, isTerm ->
-            viewModel.onEvent(CreateFlashCardUiAction.OnSelectLanguageClicked(languageCode, isTerm))
+        onSelectTermLanguageClicked = { languageCode ->
+            viewModel.onEvent(CreateFlashCardUiAction.OnSelectTermLanguageClicked(languageCode))
         },
-        onVoiceSelected = { voiceCode, isTerm ->
-            viewModel.onEvent(CreateFlashCardUiAction.OnSelectVoiceClicked(voiceCode, isTerm))
+        onTermVoiceSelected = { voiceCode ->
+            viewModel.onEvent(CreateFlashCardUiAction.OnSelectTermVoiceClicked(voiceCode))
+        },
+        onSelectDefinitionLanguageClicked = { languageCode ->
+            viewModel.onEvent(CreateFlashCardUiAction.OnSelectDefinitionLanguageClicked(languageCode))
+        },
+        onDefinitionVoiceSelected = { voiceCode ->
+            viewModel.onEvent(CreateFlashCardUiAction.OnSelectDefinitionVoiceClicked(voiceCode))
         },
     )
 }
@@ -229,7 +259,7 @@ fun CreateFlashCard(
     definition: String = "",
     definitionImageUri: Uri? = null,
     definitionImageURL: String = "",
-    onTermImageChanged: (Uri) -> Unit = {},
+    onTermImageChanged: (Uri?) -> Unit = {},
     isLoading: Boolean = false,
     hint: String = "",
     showHint: Boolean = false,
@@ -242,16 +272,20 @@ fun CreateFlashCard(
     onShowHintClicked: (Boolean) -> Unit = {},
     onExplanationChanged: (String) -> Unit = {},
     onShowExplanationClicked: (Boolean) -> Unit = {},
-    onUploadImage: (Uri) -> Unit = {},
-    onDeleteImage: () -> Unit = {},
+    onUploadImage: (Uri, Boolean) -> Unit = { _, _ -> },
+    onDeleteImage: (Boolean) -> Unit = {},
     onNavigationBack: () -> Unit = {},
     onSaveFlashCardClicked: () -> Unit = {},
-    queryImage: String = "",
-    searchImageResponseModel: SearchImageResponseModel? = null,
-    onQueryImageChanged: (String) -> Unit = {},
+    termQueryImage: String = "",
+    termSearchImageResponseModel: SearchImageResponseModel? = null,
+    onQueryTermImageChanged: (String) -> Unit = {},
+    definitionQueryImage: String = "",
+    definitionSearchImageResponseModel: SearchImageResponseModel? = null,
+    onQueryDefinitionImageChanged: (String) -> Unit = {},
     onDefinitionImageUrlChanged: (String) -> Unit = {},
     onTermImageUrlChanged: (String) -> Unit = {},
-    isSearchImageLoading: Boolean = false,
+    isSearchTermImageLoading: Boolean = false,
+    isSearchDefinitionImageLoading: Boolean = false,
     studySetColor: Color = colorScheme.primary,
     termLanguageModel: LanguageModel? = null,
     termVoiceModel: VoiceModel? = null,
@@ -260,21 +294,18 @@ fun CreateFlashCard(
     definitionVoiceModel: VoiceModel? = null,
     languageModels: List<LanguageModel> = emptyList(),
     definitionVoicesModel: List<VoiceModel> = emptyList(),
-    onSelectLanguageClicked: (LanguageModel, Boolean) -> Unit = { _, _ -> },
-    onVoiceSelected: (VoiceModel, Boolean) -> Unit = { _, _ -> },
+    onSelectTermLanguageClicked: (LanguageModel) -> Unit = { _ -> },
+    onTermVoiceSelected: (VoiceModel) -> Unit = { _ -> },
+    onSelectDefinitionLanguageClicked: (LanguageModel) -> Unit = { _ -> },
+    onDefinitionVoiceSelected: (VoiceModel) -> Unit = { _ -> },
 ) {
-
-    val bottomSheetSetting = rememberModalBottomSheetState()
-    var showBottomSheetSetting by remember {
-        mutableStateOf(false)
-    }
-
-    val imageCropper = rememberImageCropper()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val imagePicker = rememberImagePicker(onImage = { uri ->
+
+    val definitionImageCropper = rememberImageCropper()
+    val definitionImagePicker = rememberImagePicker(onImage = { uri ->
         scope.launch {
-            when (val result = imageCropper.crop(uri, context)) {
+            when (val result = definitionImageCropper.crop(uri, context)) {
                 CropResult.Cancelled -> { /* Handle cancellation */
                 }
 
@@ -288,24 +319,53 @@ fun CreateFlashCard(
         }
     })
 
-    val cropState = imageCropper.cropState
+    val definitionCropState = definitionImageCropper.cropState
 
-    var showSearchImageBottomSheet by remember {
+    var showDefinitionSearchImageBottomSheet by remember {
         mutableStateOf(false)
     }
 
-    val searchImageBottomSheet = rememberModalBottomSheetState()
+    val searchDefinitionImageBottomSheet = rememberModalBottomSheetState()
 
-    var showSelectLanguageBottomSheet by remember {
+    val termImageCropper = rememberImageCropper()
+    val termImagePicker = rememberImagePicker(onImage = { uri ->
+        scope.launch {
+            when (val result = termImageCropper.crop(uri, context)) {
+                CropResult.Cancelled -> { /* Handle cancellation */
+                }
+
+                is CropError -> { /* Handle error */
+                }
+
+                is CropResult.Success -> {
+                    onTermImageChanged(context.bitmapToUri(result.bitmap))
+                }
+            }
+        }
+    })
+
+    val termCropState = termImageCropper.cropState
+
+    var showTermSearchImageBottomSheet by remember {
         mutableStateOf(false)
     }
 
-    var showSelectVoiceBottomSheet by remember {
+    val searchTermImageBottomSheet = rememberModalBottomSheetState()
+
+    var showTermSelectLanguageBottomSheet by remember {
         mutableStateOf(false)
     }
 
-    var isTermSelect by remember {
-        mutableStateOf(true)
+    var showTermSelectVoiceBottomSheet by remember {
+        mutableStateOf(false)
+    }
+
+    var showDefinitionSelectLanguageBottomSheet by remember {
+        mutableStateOf(false)
+    }
+
+    var showDefinitionSelectVoiceBottomSheet by remember {
+        mutableStateOf(false)
     }
 
     Box(
@@ -317,9 +377,6 @@ fun CreateFlashCard(
                     onNavigationBack = onNavigationBack,
                     onSaveFlashCardClicked = onSaveFlashCardClicked,
                     enableSaveButton = term.isNotEmpty() && definition.isNotEmpty(),
-                    onSettingsClicked = {
-                        showBottomSheetSetting = true
-                    },
                     title = stringResource(R.string.txt_create_flashcard),
                     color = studySetColor
                 )
@@ -361,17 +418,16 @@ fun CreateFlashCard(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     InputChip(
-                                        selected = showSelectLanguageBottomSheet,
+                                        selected = showTermSelectLanguageBottomSheet,
                                         border = BorderStroke(
                                             width = 1.dp,
                                             color = when {
-                                                showSelectLanguageBottomSheet -> studySetColor
+                                                showTermSelectLanguageBottomSheet -> studySetColor
                                                 else -> Color.Gray
                                             }
                                         ),
                                         onClick = {
-                                            isTermSelect = true
-                                            showSelectLanguageBottomSheet = true
+                                            showTermSelectLanguageBottomSheet = true
                                         },
                                         label = {
                                             Row(
@@ -382,7 +438,7 @@ fun CreateFlashCard(
                                                     imageVector = Icons.Default.Language,
                                                     contentDescription = null,
                                                     tint = when {
-                                                        showSelectLanguageBottomSheet -> studySetColor
+                                                        showTermSelectLanguageBottomSheet -> studySetColor
                                                         else -> Color.Gray
                                                     }
                                                 )
@@ -390,7 +446,7 @@ fun CreateFlashCard(
                                                     text = termLanguageModel?.name
                                                         ?: stringResource(R.string.txt_english_us),
                                                     color = when {
-                                                        showSelectLanguageBottomSheet -> studySetColor
+                                                        showTermSelectLanguageBottomSheet -> studySetColor
                                                         else -> Color.Gray
                                                     }
                                                 )
@@ -408,8 +464,7 @@ fun CreateFlashCard(
                                             }
                                         ),
                                         onClick = {
-                                            isTermSelect = true
-                                            showSelectVoiceBottomSheet = true
+                                            showTermSelectVoiceBottomSheet = true
                                         },
                                         label = {
                                             Row(
@@ -420,7 +475,7 @@ fun CreateFlashCard(
                                                     imageVector = Icons.Default.KeyboardVoice,
                                                     contentDescription = null,
                                                     tint = when {
-                                                        showSelectVoiceBottomSheet -> studySetColor
+                                                        showTermSelectVoiceBottomSheet -> studySetColor
                                                         else -> Color.Gray
                                                     }
                                                 )
@@ -428,7 +483,7 @@ fun CreateFlashCard(
                                                     text = termVoiceModel?.name
                                                         ?: stringResource(R.string.txt_voice),
                                                     color = when {
-                                                        showSelectVoiceBottomSheet -> studySetColor
+                                                        showTermSelectVoiceBottomSheet -> studySetColor
                                                         else -> Color.Gray
                                                     }
                                                 )
@@ -473,24 +528,33 @@ fun CreateFlashCard(
                                     )
 
                                     ChipSelectImage(
-                                        onUploadImage = onUploadImage,
+                                        onUploadImage = {
+                                            onUploadImage(it, true)
+                                        },
                                         imageUri = termImageUri,
                                         imageUrl = termImageURL,
-                                        onDeleteImage = onDeleteImage,
+                                        onDeleteImage = {
+                                            onDeleteImage(true)
+                                        },
                                         color = when {
                                             termImageUri != null || termImageURL.isNotEmpty() -> studySetColor
                                             else -> Color.Gray
                                         },
                                         onChooseImage = {
-                                            showSearchImageBottomSheet = true
-                                        }
+                                            showTermSearchImageBottomSheet = true
+                                        },
+                                        label = stringResource(R.string.txt_term_image)
                                     )
                                 }
                             }
                         }
                     }
                     item {
-                        if (showHint) {
+                        AnimatedVisibility(
+                            visible = showHint,
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it })
+                        ) {
                             HintCard(
                                 hint = hint,
                                 onHintChanged = onHintChanged,
@@ -499,18 +563,171 @@ fun CreateFlashCard(
                             )
                         }
                     }
+                    // Definition
                     item {
-                        FlashCardTextFieldContainer(
-                            term = term,
-                            onTermChanged = onTermChanged,
-                            definition = definition,
-                            onDefinitionChanged = onDefinitionChanged,
-                            color = studySetColor
-                        )
-                    }
+                        Card(
+                            modifier = modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            elevation = CardDefaults.elevatedCardElevation(
+                                defaultElevation = 5.dp,
+                                focusedElevation = 8.dp
+                            ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = colorScheme.surface
+                            ),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                FlashCardTextField(
+                                    value = definition,
+                                    onValueChange = onDefinitionChanged,
+                                    hint = stringResource(R.string.txt_definition),
+                                    color = studySetColor
+                                )
+                                FlowRow(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    InputChip(
+                                        selected = showDefinitionSelectLanguageBottomSheet,
+                                        border = BorderStroke(
+                                            width = 1.dp,
+                                            color = when {
+                                                showDefinitionSelectLanguageBottomSheet -> studySetColor
+                                                else -> Color.Gray
+                                            }
+                                        ),
+                                        onClick = {
+                                            showDefinitionSelectLanguageBottomSheet = true
+                                        },
+                                        label = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Language,
+                                                    contentDescription = null,
+                                                    tint = when {
+                                                        showDefinitionSelectLanguageBottomSheet -> studySetColor
+                                                        else -> Color.Gray
+                                                    }
+                                                )
+                                                Text(
+                                                    text = definitionLanguageModel?.name
+                                                        ?: stringResource(R.string.txt_english_us),
+                                                    color = when {
+                                                        showDefinitionSelectLanguageBottomSheet -> studySetColor
+                                                        else -> Color.Gray
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    )
 
+                                    InputChip(
+                                        selected = false,
+                                        border = BorderStroke(
+                                            width = 1.dp,
+                                            color = when {
+                                                false -> studySetColor
+                                                else -> Color.Gray
+                                            }
+                                        ),
+                                        onClick = {
+                                            showDefinitionSelectVoiceBottomSheet = true
+                                        },
+                                        label = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.KeyboardVoice,
+                                                    contentDescription = null,
+                                                    tint = when {
+                                                        showDefinitionSelectVoiceBottomSheet -> studySetColor
+                                                        else -> Color.Gray
+                                                    }
+                                                )
+                                                Text(
+                                                    text = definitionVoiceModel?.name
+                                                        ?: stringResource(R.string.txt_voice),
+                                                    color = when {
+                                                        showDefinitionSelectVoiceBottomSheet -> studySetColor
+                                                        else -> Color.Gray
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    )
+
+                                    InputChip(
+                                        selected = showExplanation,
+                                        border = BorderStroke(
+                                            width = 1.dp,
+                                            color = when {
+                                                showExplanation -> studySetColor
+                                                else -> Color.Gray
+                                            }
+                                        ),
+                                        onClick = {
+                                            onShowExplanationClicked(!showExplanation)
+                                        },
+                                        label = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Lightbulb,
+                                                    contentDescription = null,
+                                                    tint = when {
+                                                        showExplanation -> studySetColor
+                                                        else -> Color.Gray
+                                                    }
+                                                )
+                                                Text(
+                                                    text = stringResource(R.string.txt_explanation),
+                                                    color = when {
+                                                        showExplanation -> studySetColor
+                                                        else -> Color.Gray
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    )
+
+                                    ChipSelectImage(
+                                        onUploadImage = {
+                                            onUploadImage(it, false)
+                                        },
+                                        imageUri = definitionImageUri,
+                                        imageUrl = definitionImageURL,
+                                        onDeleteImage = {
+                                            onDeleteImage(false)
+                                        },
+                                        color = when {
+                                            definitionImageUri != null || definitionImageURL.isNotEmpty() -> studySetColor
+                                            else -> Color.Gray
+                                        },
+                                        onChooseImage = {
+                                            showDefinitionSearchImageBottomSheet = true
+                                        },
+                                        label = stringResource(R.string.txt_definition_image)
+                                    )
+                                }
+                            }
+                        }
+                    }
                     item {
-                        if (showExplanation) {
+                        AnimatedVisibility(
+                            visible = showExplanation,
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it })
+                        ) {
                             ExplanationCard(
                                 explanation = explanation,
                                 onExplanationChanged = onExplanationChanged,
@@ -550,67 +767,104 @@ fun CreateFlashCard(
                 )
                 LoadingOverlay(isLoading = isLoading)
             }
-
-            if (showBottomSheetSetting) {
-                FlashcardBottomSheet(
-                    onDismissRequest = {
-                        showBottomSheetSetting = false
-                    },
-                    sheetState = bottomSheetSetting,
-                    onShowHintClicked = onShowHintClicked,
-                    onShowExplanationClicked = onShowExplanationClicked
-                )
-            }
-
-            if (showSearchImageBottomSheet) {
-                FlashcardSelectImageBottomSheet(
-                    modifier = Modifier,
-                    searchImageBottomSheet = searchImageBottomSheet,
-                    onDismissRequest = {
-                        showSearchImageBottomSheet = false
-                    },
-                    queryImage = queryImage,
-                    searchImageResponseModel = searchImageResponseModel,
-                    onQueryImageChanged = onQueryImageChanged,
-                    isSearchImageLoading = isSearchImageLoading,
-                    onDefinitionImageUrlChanged = {
-                        onDefinitionImageUrlChanged(it)
-                        onDefinitionImageChanged(null)
-                    },
-                    imagePicker = imagePicker
-                )
-            }
-        }
-        if (cropState != null) {
-            ImageCropperDialog(
-                state = cropState,
-            )
         }
     }
-    if (showSelectLanguageBottomSheet) {
-        LanguageBottomSheet(
+    if (showDefinitionSearchImageBottomSheet) {
+        FlashcardSelectImageBottomSheet(
+            modifier = Modifier,
+            searchImageBottomSheet = searchDefinitionImageBottomSheet,
             onDismissRequest = {
-                showSelectLanguageBottomSheet = false
+                showDefinitionSearchImageBottomSheet = false
             },
-            languageList = languageModels,
-            onLanguageSelected = { language, isTerm ->
-                onSelectLanguageClicked(language, isTerm)
-                showSelectVoiceBottomSheet = true
+            queryImage = definitionQueryImage,
+            searchImageResponseModel = definitionSearchImageResponseModel,
+            onQueryImageChanged = onQueryDefinitionImageChanged,
+            isSearchImageLoading = isSearchDefinitionImageLoading,
+            onImageUrlChanged = {
+                onDefinitionImageUrlChanged(it)
+                onDefinitionImageChanged(null)
             },
-            languageModel = if (isTermSelect) termLanguageModel else definitionLanguageModel,
+            imagePicker = definitionImagePicker
         )
     }
 
-    if (showSelectVoiceBottomSheet) {
+    if (definitionCropState != null) {
+        ImageCropperDialog(
+            state = definitionCropState,
+        )
+    }
+
+    if (showTermSearchImageBottomSheet) {
+        FlashcardSelectImageBottomSheet(
+            modifier = Modifier,
+            searchImageBottomSheet = searchTermImageBottomSheet,
+            onDismissRequest = {
+                showTermSearchImageBottomSheet = false
+            },
+            queryImage = termQueryImage,
+            searchImageResponseModel = termSearchImageResponseModel,
+            onQueryImageChanged = onQueryTermImageChanged,
+            isSearchImageLoading = isSearchTermImageLoading,
+            onImageUrlChanged = {
+                onTermImageUrlChanged(it)
+                onTermImageChanged(null)
+            },
+            imagePicker = termImagePicker
+        )
+    }
+
+    if (termCropState != null) {
+        ImageCropperDialog(
+            state = termCropState,
+        )
+    }
+
+    if (showTermSelectLanguageBottomSheet) {
+        LanguageBottomSheet(
+            onDismissRequest = {
+                showTermSelectLanguageBottomSheet = false
+            },
+            languageList = languageModels,
+            onLanguageSelected = { language ->
+                onSelectTermLanguageClicked(language)
+                showTermSelectVoiceBottomSheet = true
+            },
+            languageModel = termLanguageModel,
+        )
+    }
+
+    if (showTermSelectVoiceBottomSheet) {
         VoiceBottomSheet(
             onDismissRequest = {
-                showSelectVoiceBottomSheet = false
+                showTermSelectVoiceBottomSheet = false
             },
-            voiceList = if (isTermSelect) termVoicesModel else definitionVoicesModel,
-            onVoiceSelected = { voice, isTerm ->
-                onVoiceSelected(voice, isTerm)
+            voiceList = termVoicesModel,
+            onVoiceSelected = onTermVoiceSelected,
+            voiceModel = termVoiceModel,
+        )
+    }
+    if (showDefinitionSelectLanguageBottomSheet) {
+        LanguageBottomSheet(
+            onDismissRequest = {
+                showDefinitionSelectLanguageBottomSheet = false
             },
-            voiceModel = if (isTermSelect) termVoiceModel else definitionVoiceModel,
+            languageList = languageModels,
+            onLanguageSelected = { language ->
+                onSelectDefinitionLanguageClicked(language)
+                showDefinitionSelectVoiceBottomSheet = true
+            },
+            languageModel = definitionLanguageModel,
+        )
+    }
+
+    if (showDefinitionSelectVoiceBottomSheet) {
+        VoiceBottomSheet(
+            onDismissRequest = {
+                showDefinitionSelectVoiceBottomSheet = false
+            },
+            voiceList = definitionVoicesModel,
+            onVoiceSelected = onDefinitionVoiceSelected,
+            voiceModel = definitionVoiceModel,
         )
     }
 }

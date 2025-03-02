@@ -2,6 +2,7 @@ package com.pwhs.quickmem.domain.repository
 
 import com.pwhs.quickmem.core.data.enums.LearnMode
 import com.pwhs.quickmem.core.utils.Resources
+import com.pwhs.quickmem.domain.model.flashcard.BufferResponseModel
 import com.pwhs.quickmem.domain.model.flashcard.CreateFlashCardModel
 import com.pwhs.quickmem.domain.model.flashcard.EditFlashCardModel
 import com.pwhs.quickmem.domain.model.flashcard.FlashCardResponseModel
@@ -20,12 +21,6 @@ interface FlashCardRepository {
         token: String,
         id: String,
     ): Flow<Resources<Unit>>
-
-    suspend fun toggleStarredFlashCard(
-        token: String,
-        id: String,
-        isStarred: Boolean,
-    ): Flow<Resources<UpdateFlashCardResponseModel>>
 
     suspend fun updateFlashCard(
         token: String,
@@ -89,4 +84,10 @@ interface FlashCardRepository {
         token: String,
         languageCode: String,
     ): Flow<Resources<List<VoiceModel>>>
+
+    suspend fun getSpeech(
+        token: String,
+        input: String,
+        voiceCode: String,
+    ): Flow<Resources<BufferResponseModel>>
 }

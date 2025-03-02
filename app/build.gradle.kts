@@ -137,6 +137,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.review)
     implementation(libs.purchases)
     implementation(libs.purchases.ui)
     implementation(libs.accompanist.permissions)
@@ -161,9 +162,6 @@ dependencies {
     implementation(libs.lottie.compose)
 
     implementation(libs.google.firebase.auth)
-    implementation(libs.exoplayer)
-    implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.exoplayer.dash)
     implementation(libs.androidx.media3.ui)
 
 

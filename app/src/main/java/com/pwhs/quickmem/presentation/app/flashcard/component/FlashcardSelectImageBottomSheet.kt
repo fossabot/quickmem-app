@@ -42,7 +42,7 @@ fun FlashcardSelectImageBottomSheet(
     modifier: Modifier = Modifier,
     searchImageBottomSheet: SheetState,
     onQueryImageChanged: (String) -> Unit,
-    onDefinitionImageUrlChanged: (String) -> Unit,
+    onImageUrlChanged: (String) -> Unit,
     queryImage: String,
     isSearchImageLoading: Boolean,
     searchImageResponseModel: SearchImageResponseModel?,
@@ -57,8 +57,7 @@ fun FlashcardSelectImageBottomSheet(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f)
+                .fillMaxHeight(0.95f)
                 .padding(16.dp)
         ) {
             Text(
@@ -128,7 +127,7 @@ fun FlashcardSelectImageBottomSheet(
                             .size(100.dp)
                             .padding(4.dp)
                             .clickable {
-                                onDefinitionImageUrlChanged(image.imageUrl)
+                                onImageUrlChanged(image.imageUrl)
                                 onDismissRequest()
                             }
                     )

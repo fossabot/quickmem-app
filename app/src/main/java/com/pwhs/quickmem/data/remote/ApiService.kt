@@ -43,6 +43,7 @@ import com.pwhs.quickmem.data.dto.classes.RemoveMembersRequestDto
 import com.pwhs.quickmem.data.dto.classes.SaveRecentAccessClassRequestDto
 import com.pwhs.quickmem.data.dto.classes.UpdateClassRequestDto
 import com.pwhs.quickmem.data.dto.classes.UpdateClassResponseDto
+import com.pwhs.quickmem.data.dto.flashcard.BufferResponseDto
 import com.pwhs.quickmem.data.dto.flashcard.CreateFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.EditFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.FlashCardResponseDto
@@ -50,7 +51,6 @@ import com.pwhs.quickmem.data.dto.flashcard.FlipFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.LanguageDto
 import com.pwhs.quickmem.data.dto.flashcard.QuizStatusFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.RatingFlashCardDto
-import com.pwhs.quickmem.data.dto.flashcard.ToggleStarredFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.TrueFalseStatusFlashCardDto
 import com.pwhs.quickmem.data.dto.flashcard.UpdateFlashCardResponseDto
 import com.pwhs.quickmem.data.dto.flashcard.VoiceDto
@@ -95,7 +95,6 @@ import com.pwhs.quickmem.data.dto.user.SearchUserResponseDto
 import com.pwhs.quickmem.data.dto.user.UpdateCoinRequestDto
 import com.pwhs.quickmem.data.dto.user.UpdateCoinResponseDto
 import com.pwhs.quickmem.data.dto.user.UserDetailResponseDto
-import com.pwhs.quickmem.data.dto.verify_email.EmailVerificationResponse
 import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -379,13 +378,6 @@ interface ApiService {
         @Path("id") id: String,
     )
 
-    @PATCH("flashcard/{id}/starred")
-    suspend fun toggleStarredFlashCard(
-        @Header("Authorization") token: String,
-        @Path("id") id: String,
-        @Body toggleStarredFlashCardDto: ToggleStarredFlashCardDto,
-    ): UpdateFlashCardResponseDto
-
     @PATCH("flashcard/{id}/flip-status")
     suspend fun updateFlipFlashCard(
         @Header("Authorization") token: String,
@@ -441,6 +433,13 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("languageCode") languageCode: String,
     ): List<VoiceDto>
+
+    @GET("flashcard/speech")
+    suspend fun getSpeech(
+        @Header("Authorization") token: String,
+        @Query("input") input: String,
+        @Query("voiceCode") voiceCode: String,
+    ): BufferResponseDto
 
     // Folder
     @POST("folder")
